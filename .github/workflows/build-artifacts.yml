@@ -17,7 +17,7 @@ permissions:
   contents: write
 
 jobs:
-  # 1. Android 端 APK 构建 (Debug & Release APK)
+  # 1. Android 端 APK 构建 (产出独立 .apk，不压缩为 zip)
   build-android:
     name: Android (APK)
     runs-on: ubuntu-latest
@@ -43,20 +43,20 @@ jobs:
         run: |
           gradle :composeApp:assembleDebug --stacktrace
 
-      - name: Prepare Android Artifacts
+      - name: Prepare Android APK
         run: |
           mkdir -p artifacts
-          cp composeApp/build/outputs/apk/debug/*.apk artifacts/KamiPaperbox-Android-Universal-debug.apk
+          cp composeApp/build/outputs/apk/debug/*.apk artifacts/KamiPaperbox-Android-Universal.apk
           ls -lh artifacts/
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: KamiPaperbox-Android-APK
-          path: artifacts/*.apk
+          name: Android-APK
+          path: artifacts/KamiPaperbox-Android-Universal.apk
           if-no-files-found: error
 
-  # 2. 桌面端多平台构建 (Windows: MSI 安装包 + Portable ZIP 便携版; Linux: DEB 安装包 + Portable TAR.GZ 便携版)
+  # 2. 桌面端构建 (Windows: 独立 MSI 安装包 + 便携版 ZIP; Linux: 独立 DEB 安装包 + 便携版 TAR.GZ)
   build-desktop:
     name: Desktop (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
@@ -84,61 +84,56 @@ jobs:
         with:
           gradle-version: '8.6'
 
-      # Linux 环境下安装打包 .deb 与二进制剥离所需依赖
+      # Linux 环境下安装打包工具
       - name: Install Linux packaging tools
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y fakeroot binutils
 
-      # 构建原生安装包 (.msi / .deb) 以及便携版运行目录 (createDistributable)
+      # 构建原生安装包与便携运行目录
       - name: Build Native Distribution and Distributable
         run: |
           gradle :composeApp:packageDistributionForCurrentOS :composeApp:createDistributable --stacktrace
 
-      # 打包 Windows 产物：收集 .msi 安装包并打包 Portable .zip
+      # Windows 产物：MSI 保持独立原生文件，仅便携免安装目录打包为 ZIP
       - name: Package Windows Artifacts (MSI & Portable ZIP)
         if: matrix.platform == 'windows'
         shell: bash
         run: |
           mkdir -p artifacts
-          echo "Collecting Windows MSI installer..."
-          find composeApp/build/compose/binaries/main -name "*.msi" -exec cp {} artifacts/ \; || true
+          echo "Collecting Windows MSI installer (独立安装文件)..."
+          find composeApp/build/compose/binaries/main -name "*.msi" -exec cp {} artifacts/KamiPaperbox-Windows-Setup.msi \; || true
 
-          echo "Compressing Windows Portable ZIP..."
-          if command -v 7z &> /dev/null; then
-            7z a -tzip artifacts/KamiPaperbox-Windows-x64-Portable.zip ./composeApp/build/compose/binaries/main/app/KamiPaperbox
-          else
-            powershell -Command "Compress-Archive -Path 'composeApp/build/compose/binaries/main/app/KamiPaperbox' -DestinationPath 'artifacts/KamiPaperbox-Windows-x64-Portable.zip' -Force"
-          fi
+          echo "Compressing Portable Directory into ZIP (仅免安装便携版打包为 zip)..."
+          powershell -Command "Compress-Archive -Path 'composeApp/build/compose/binaries/main/app/KamiPaperbox' -DestinationPath 'artifacts/KamiPaperbox-Windows-Portable.zip' -Force"
 
-          echo "Artifacts ready:"
+          echo "Windows Artifacts prepared:"
           ls -lh artifacts/
 
-      # 打包 Linux 产物：收集 .deb 安装包并打包 Portable .tar.gz
+      # Linux 产物：DEB 保持独立原生包，仅便携免安装目录打包
       - name: Package Linux Artifacts (DEB & Portable TAR.GZ)
         if: matrix.platform == 'linux'
         shell: bash
         run: |
           mkdir -p artifacts
-          echo "Collecting Linux DEB installer..."
-          find composeApp/build/compose/binaries/main -name "*.deb" -exec cp {} artifacts/ \; || true
+          echo "Collecting Linux DEB installer (独立安装包)..."
+          find composeApp/build/compose/binaries/main -name "*.deb" -exec cp {} artifacts/KamiPaperbox-Linux-amd64.deb \; || true
 
-          echo "Compressing Linux Portable TAR.GZ..."
-          tar -czvf artifacts/KamiPaperbox-Linux-x64-Portable.tar.gz -C composeApp/build/compose/binaries/main/app KamiPaperbox
+          echo "Compressing Portable Directory into TAR.GZ (仅免安装便携版打包)..."
+          tar -czvf artifacts/KamiPaperbox-Linux-Portable.tar.gz -C composeApp/build/compose/binaries/main/app KamiPaperbox
 
-          echo "Artifacts ready:"
+          echo "Linux Artifacts prepared:"
           ls -lh artifacts/
 
-      # 上传当前平台的桌面端构建产物
       - name: Upload Desktop Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: KamiPaperbox-${{ matrix.platform }}-Build
+          name: Desktop-${{ matrix.platform }}
           path: artifacts/*
           if-no-files-found: error
 
-  # 3. 自动发布与更新 Release 资产 (包含 APK + MSI + Portable ZIP + DEB + Portable TAR.GZ)
+  # 3. 自动发布与更新 Release (所有安装包均为独立原生文件，只有便携版是 zip)
   publish-release:
     name: Publish Release Assets
     needs: [build-android, build-desktop]
@@ -153,8 +148,17 @@ jobs:
       - name: Collect Release Files
         run: |
           mkdir -p dist
-          find release-artifacts -type f \( -name "*.apk" -o -name "*.msi" -o -name "*.deb" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} dist/ \;
-          echo "Collected files for release:"
+          # 1. Android APK (直接作为 .apk 独立发布，不额外套 zip)
+          find release-artifacts -type f -name "*.apk" -exec cp {} dist/KamiPaperbox-Android-Universal.apk \;
+          # 2. Windows MSI (直接作为 .msi 独立安装包发布，不额外套 zip)
+          find release-artifacts -type f -name "*.msi" -exec cp {} dist/KamiPaperbox-Windows-Setup.msi \;
+          # 3. Linux DEB (直接作为 .deb 独立安装包发布，不额外套 zip)
+          find release-artifacts -type f -name "*.deb" -exec cp {} dist/KamiPaperbox-Linux-amd64.deb \;
+          # 4. Windows 免安装便携版 (只有便携版打包为 zip)
+          find release-artifacts -type f -name "*Windows-Portable.zip" -exec cp {} dist/KamiPaperbox-Windows-Portable.zip \;
+          # 5. Linux 免安装便携版
+          find release-artifacts -type f -name "*Linux-Portable.tar.gz" -exec cp {} dist/KamiPaperbox-Linux-Portable.tar.gz \;
+          echo "Collected release files:"
           ls -lh dist/
 
       # 分支推送：更新名为 "Github Action Auto CI" 的自动构建测试版 Release
@@ -166,16 +170,16 @@ jobs:
           name: "Github Action Auto CI"
           body: |
             ### 🚀 Github Action Auto CI (自动构建测试版)
-            由 GitHub Actions 自动化流水线构建。全平台构建产物列表：
+            由 GitHub Actions 自动化流水线构建。各平台构建产物均以独立原生文件提供下载：
 
-            - **Android**:
-              - 通用安装包: `KamiPaperbox-Android-Universal-debug.apk`
-            - **Windows**:
-              - 安装包: `*.msi`
-              - 便携版 (解压即用): `KamiPaperbox-Windows-x64-Portable.zip`
-            - **Linux**:
-              - 安装包: `*.deb`
-              - 便携版 (解压即用): `KamiPaperbox-Linux-x64-Portable.tar.gz`
+            - 📱 **Android**:
+              - `KamiPaperbox-Android-Universal.apk` (独立的 APK 原生安装文件，手机/平板直接安装)
+            - 🪟 **Windows**:
+              - `KamiPaperbox-Windows-Setup.msi` (原生的 MSI 安装引导程序)
+              - `KamiPaperbox-Windows-Portable.zip` (绿色免安装便携版，解压即用)
+            - 🐧 **Linux**:
+              - `KamiPaperbox-Linux-amd64.deb` (原生的 DEB 系统安装包)
+              - `KamiPaperbox-Linux-Portable.tar.gz` (绿色免安装便携版，解压即用)
 
             *构建触发 Commit: ${{ github.sha }}*
           files: dist/*
