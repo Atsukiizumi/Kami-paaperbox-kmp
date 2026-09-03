@@ -1,0 +1,94 @@
+name: Build & Release Multiplatform Artifacts
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-desktop:
+    name: Build Desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # Linux 需要安装打包 .deb 所需工具
+      - name: Install packaging tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg
+
+      - name: Package Desktop Distributions
+        run: ./gradlew :composeApp:packageDistributionForCurrentOS --stacktrace
+
+      - name: Upload Artifacts (Linux deb)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: KamiPaperbox-Desktop-Linux
+          path: composeApp/build/compose/binaries/main/deb/*.deb
+          if-no-files-found: warn
+
+      - name: Upload Artifacts (macOS dmg)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: KamiPaperbox-Desktop-macOS
+          path: composeApp/build/compose/binaries/main/dmg/*.dmg
+          if-no-files-found: warn
+
+      - name: Upload Artifacts (Windows msi)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: KamiPaperbox-Desktop-Windows
+          path: composeApp/build/compose/binaries/main/msi/*.msi
+          if-no-files-found: warn
+
+  create-release:
+    name: Publish GitHub Release
+    needs: [build-desktop]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Prepare Release Assets
+        run: |
+          mkdir -p dist
+          find release-artifacts -type f \( -name "*.deb" -o -name "*.dmg" -o -name "*.msi" -o -name "*.jar" \) -exec cp {} dist/ \;
+          ls -lh dist/
+
+      - name: Release with Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          draft: false
+          prerelease: contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc')
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
