@@ -52,7 +52,7 @@ jobs:
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: Android-APK
+          name: KamiPaperbox-Android
           path: artifacts/KamiPaperbox-Android-Universal.apk
           if-no-files-found: error
 
@@ -126,11 +126,22 @@ jobs:
           echo "Linux Artifacts prepared:"
           ls -lh artifacts/
 
-      - name: Upload Desktop Artifacts
+      - name: Upload Desktop Installer
         uses: actions/upload-artifact@v4
         with:
-          name: Desktop-${{ matrix.platform }}
-          path: artifacts/*
+          name: KamiPaperbox-Installer-${{ matrix.platform }}
+          path: |
+            artifacts/*.msi
+            artifacts/*.deb
+          if-no-files-found: error
+
+      - name: Upload Desktop Portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: KamiPaperbox-Portable-${{ matrix.platform }}
+          path: |
+            artifacts/*-Portable.zip
+            artifacts/*-Portable.tar.gz
           if-no-files-found: error
 
   # 3. 自动发布与更新 Release (所有安装包均为独立原生文件，只有便携版是 zip)
