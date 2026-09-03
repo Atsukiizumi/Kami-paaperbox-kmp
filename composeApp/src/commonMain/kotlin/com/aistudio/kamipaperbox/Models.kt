@@ -12,6 +12,13 @@ enum class Source(val displayName: String) {
 }
 
 @Serializable
+enum class AiFilterMode(val label: String) {
+    SHOW_ALL("显示全部"),
+    BADGE_ONLY("仅标注勋章"),
+    HIDE_AI("彻底排除 AI")
+}
+
+@Serializable
 data class WorkCard(
     val source: Source,
     val id: String,
@@ -21,11 +28,14 @@ data class WorkCard(
     val thumb: String,
     val originalUrl: String,
     val pageCount: Int = 1,
+    val additionalImages: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
+    val translatedTags: Map<String, String> = emptyMap(),
     val width: Int? = null,
     val height: Int? = null,
     val rating: String = "s", // s: safe, q: questionable, e: explicit
-    val isAi: Boolean = false
+    val isAi: Boolean = false,
+    val isRestricted: Boolean = false // Fanbox patron/locked indicator
 )
 
 @Serializable

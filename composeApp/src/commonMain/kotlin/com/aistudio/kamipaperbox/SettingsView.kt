@@ -1,0 +1,249 @@
+package com.aistudio.kamipaperbox
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+@Composable
+fun SettingsView(
+    isCompact: Boolean
+) {
+    val prefs by SettingsManager.prefs.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(if (isCompact) 16.dp else 24.dp)
+    ) {
+        Text(
+            "纸谱与首选项",
+            style = if (isCompact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            "定制您的和风画卷体验与全局过滤规则",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+
+        Spacer(Modifier.height(20.dp))
+
+        // 1. 和风纸色主题
+        Text("和风纸色主题", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ThemePreset.entries.forEach { preset ->
+                val isSelected = prefs.themePreset == preset
+                ElevatedCard(
+                    onClick = { SettingsManager.setThemePreset(preset) },
+                    modifier = Modifier.weight(1f),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(if (isCompact) 10.dp else 14.dp)) {
+                        Text(
+                            text = when (preset) {
+                                ThemePreset.WASHI -> "和纸"
+                                ThemePreset.AOSUMI -> "青墨"
+                                ThemePreset.SHUSHA -> "朱砂"
+                            },
+                            fontWeight = FontWeight.Bold,
+                            fontSize = if (isCompact) 13.sp else 15.sp
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = when (preset) {
+                                ThemePreset.WASHI -> "Washi"
+                                ThemePreset.AOSUMI -> "Aosumi"
+                                ThemePreset.SHUSHA -> "Shusha"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (isSelected) "当前生效" else "点击切换",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 10.sp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        Spacer(Modifier.height(20.dp))
+
+        // 2. 内容分级与 R18 控制
+        Text("内容分级与安全", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                // R18 全局开关
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("包含 R18 / 限制级内容", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text(
+                            "Pixiv / Fanbox 将通过远端 API 请求完整限制级内容；Booru 站点放开分级限制。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            lineHeight = 18.sp
+                        )
+                    }
+                    Switch(
+                        checked = prefs.includeR18,
+                        onCheckedChange = { SettingsManager.setIncludeR18(it) }
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Spacer(Modifier.height(14.dp))
+
+                // 高斯模糊开关
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("瀑布流敏感图像高斯模糊", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text(
+                            "在画卷中对敏感作品应用高斯模糊遮罩；点击大图灯箱时正常显示原图。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            lineHeight = 18.sp
+                        )
+                    }
+                    Switch(
+                        checked = prefs.blurNsfw,
+                        onCheckedChange = { SettingsManager.setBlurNsfw(it) }
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        Spacer(Modifier.height(20.dp))
+
+        // 3. AI 生成作品过滤模式
+        Text("AI 生成作品管理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "针对画卷中标记为 AI 生成的作品的处理规则",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AiFilterMode.entries.forEach { mode ->
+                val isSelected = prefs.aiFilterMode == mode
+                OutlinedCard(
+                    onClick = { SettingsManager.setAiFilterMode(mode) },
+                    modifier = Modifier.weight(1f),
+                    colors = CardDefaults.outlinedCardColors(
+                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            mode.label,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 12.sp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        Spacer(Modifier.height(20.dp))
+
+        // 4. 网络加速与镜像
+        Text("网络与图源加速", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("启用 i.pixiv.re 反盗链高速镜像", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text(
+                        "自动将 Pixiv 官方图片服务器重定向至反盗链镜像节点，彻底解决 403 错误与加载超时。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        lineHeight = 18.sp
+                    )
+                }
+                Switch(
+                    checked = prefs.usePixivMirror,
+                    onCheckedChange = { SettingsManager.setUsePixivMirror(it) }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+
+        // 5. 架构与致谢说明
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text("Kami Paperbox (纸匣)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "• 原项目: Atsukiizumi/Kami-paperbox\n• 架构: Compose Multiplatform (Desktop / Android 双轨优化)\n• 离线引擎: Room Database + SQLite 全平台持久化",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    lineHeight = 20.sp
+                )
+            }
+        }
+    }
+}
