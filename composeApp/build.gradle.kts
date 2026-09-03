@@ -53,6 +53,8 @@ compose.desktop {
             packageVersion = "1.0.0"
             description = "Kami Paperbox - Modern Multiplatform Image Viewer and Vault"
             vendor = "Kami"
+
+            outputBaseDir.set(project.layout.buildDirectory.dir("compose/binaries"))
         }
     }
 }
