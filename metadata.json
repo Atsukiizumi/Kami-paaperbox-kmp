@@ -1,0 +1,6 @@
+{
+  "name": "Kami Paperbox",
+  "description": "An image viewer and vault application.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

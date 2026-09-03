@@ -1,0 +1,54 @@
+package com.aistudio.kamipaperbox
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+enum class Source(val displayName: String) {
+    SAFEBOORU("Safebooru"),
+    DANBOORU("Danbooru"),
+    KONACHAN("Konachan"),
+    YANDE("Yande.re"),
+    PIXIV("Pixiv")
+}
+
+@Serializable
+data class WorkCard(
+    val source: Source,
+    val id: String,
+    val title: String,
+    val author: String,
+    val authorId: String = "",
+    val thumb: String,
+    val originalUrl: String,
+    val pageCount: Int = 1,
+    val tags: List<String> = emptyList(),
+    val width: Int? = null,
+    val height: Int? = null,
+    val rating: String = "s", // s: safe, q: questionable, e: explicit
+    val isAi: Boolean = false
+)
+
+@Serializable
+data class VaultItem(
+    val key: String, // source_id
+    val source: Source,
+    val id: String,
+    val title: String,
+    val author: String,
+    val thumb: String,
+    val originalUrl: String,
+    val savedAt: Long = 0L,
+    val tags: List<String> = emptyList(),
+    val localFilePath: String? = null
+)
+
+@Serializable
+data class HistoryItem(
+    val key: String,
+    val source: Source,
+    val id: String,
+    val title: String,
+    val thumb: String,
+    val originalUrl: String,
+    val viewedAt: Long
+)

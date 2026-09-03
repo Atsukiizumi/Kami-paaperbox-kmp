@@ -1,0 +1,10 @@
+{
+  "name": "kami-paperbox-android",
+  "version": "1.0.0",
+  "description": "Android port of Kami-paperbox",
+  "scripts": {
+    "dev": "echo 'This is an Android project. Open in Android Studio.'",
+    "build": "echo 'Build step bypassed. This is an Android project.'",
+    "start": "echo 'Start step bypassed.'"
+  }
+}
