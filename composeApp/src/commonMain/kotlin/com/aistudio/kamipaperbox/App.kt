@@ -3,6 +3,8 @@ package com.aistudio.kamipaperbox
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
@@ -17,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -209,12 +212,27 @@ fun AppScreenContent(
 @Composable
 fun BrowseView(isCompact: Boolean, onSelect: (WorkCard) -> Unit) {
     var posts by remember { mutableStateOf<List<WorkCard>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var selectedSource by remember { mutableStateOf(Source.SAFEBOORU) }
+    var isLoading by remember { mutableStateOf(false) }
+    var selectedSource by remember { mutableStateOf(Source.DANBOORU) }
+    var currentPage by remember { mutableStateOf(1) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(selectedSource) {
         isLoading = true
-        posts = GalleryRepository.fetchPosts(source = selectedSource, page = 0, limit = 40)
+        currentPage = 1
+        posts = GalleryRepository.fetchPosts(source = selectedSource, page = 1, limit = 40)
+        isLoading = false
+    }
+
+    suspend fun loadMore() {
+        if (isLoading) return
+        isLoading = true
+        val nextPage = currentPage + 1
+        val newPosts = GalleryRepository.fetchPosts(source = selectedSource, page = nextPage, limit = 40)
+        if (newPosts.isNotEmpty()) {
+            posts = posts + newPosts
+            currentPage = nextPage
+        }
         isLoading = false
     }
 
@@ -245,8 +263,13 @@ fun BrowseView(isCompact: Boolean, onSelect: (WorkCard) -> Unit) {
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Source.values().take(3).forEach { src ->
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Source.entries.forEach { src ->
                     FilterChip(
                         selected = selectedSource == src,
                         onClick = { selectedSource = src },
@@ -256,13 +279,30 @@ fun BrowseView(isCompact: Boolean, onSelect: (WorkCard) -> Unit) {
             }
         }
 
-        if (isLoading) {
+        if (isLoading && posts.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         } else {
             // 瀑布流：手机端自适应 2 列 (minSize = 160.dp)，桌面端自适应 3~6 列 (minSize = 220.dp)
+            val gridState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
+            
+            // 自动加载更多逻辑
+            val shouldLoadMore = remember {
+                derivedStateOf {
+                    val lastVisibleItemIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                    lastVisibleItemIndex >= posts.size - 10 && posts.isNotEmpty() && !isLoading
+                }
+            }
+
+            LaunchedEffect(shouldLoadMore.value) {
+                if (shouldLoadMore.value) {
+                    loadMore()
+                }
+            }
+
             LazyVerticalStaggeredGrid(
+                state = gridState,
                 columns = StaggeredGridCells.Adaptive(minSize = if (isCompact) 160.dp else 220.dp),
                 horizontalArrangement = Arrangement.spacedBy(if (isCompact) 8.dp else 14.dp),
                 verticalItemSpacing = if (isCompact) 8.dp else 14.dp,
@@ -271,6 +311,17 @@ fun BrowseView(isCompact: Boolean, onSelect: (WorkCard) -> Unit) {
             ) {
                 items(posts) { work ->
                     ArtworkCard(work = work, isCompact = isCompact, onClick = { onSelect(work) })
+                }
+                
+                if (isLoading && posts.isNotEmpty()) {
+                    item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    }
                 }
             }
         }
@@ -282,7 +333,25 @@ fun SearchView(isCompact: Boolean, onSelect: (WorkCard) -> Unit) {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<WorkCard>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
+    var selectedSource by remember { mutableStateOf(Source.DANBOORU) }
+    var currentPage by remember { mutableStateOf(1) }
     val scope = rememberCoroutineScope()
+
+    suspend fun performSearch(newSearch: Boolean = true) {
+        if (isSearching) return
+        if (newSearch) {
+            currentPage = 1
+            results = emptyList()
+        }
+        isSearching = true
+        val nextPage = if (newSearch) 1 else currentPage + 1
+        val newResults = GalleryRepository.fetchPosts(source = selectedSource, query = query, page = nextPage, limit = 40)
+        if (newResults.isNotEmpty()) {
+            results = if (newSearch) newResults else results + newResults
+            currentPage = nextPage
+        }
+        isSearching = false
+    }
 
     Column(
         modifier = Modifier
@@ -310,40 +379,67 @@ fun SearchView(isCompact: Boolean, onSelect: (WorkCard) -> Unit) {
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = {
+                    scope.launch { performSearch() }
+                })
             )
         }
 
+        // 源切换与热搜
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                "热搜: landscape, anime, sky",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-            Button(
-                onClick = {
-                    scope.launch {
-                        isSearching = true
-                        results = GalleryRepository.fetchPosts(query = query, limit = 40)
-                        isSearching = false
-                    }
-                },
-                shape = RoundedCornerShape(8.dp)
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text("检索")
+                Source.entries.forEach { src ->
+                    FilterChip(
+                        selected = selectedSource == src,
+                        onClick = { selectedSource = src },
+                        label = { Text(src.displayName, fontSize = 11.sp) },
+                        modifier = Modifier.height(32.dp)
+                    )
+                }
+            }
+            
+            Button(
+                onClick = { scope.launch { performSearch() } },
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(36.dp)
+            ) {
+                Text("检索", fontSize = 13.sp)
             }
         }
 
-        if (isSearching) {
+        if (isSearching && results.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else {
+            val gridState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
+            
+            val shouldLoadMore = remember {
+                derivedStateOf {
+                    val lastVisibleItemIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                    lastVisibleItemIndex >= results.size - 10 && results.isNotEmpty() && !isSearching
+                }
+            }
+
+            LaunchedEffect(shouldLoadMore.value) {
+                if (shouldLoadMore.value) {
+                    performSearch(newSearch = false)
+                }
+            }
+
             LazyVerticalStaggeredGrid(
+                state = gridState,
                 columns = StaggeredGridCells.Adaptive(minSize = if (isCompact) 160.dp else 220.dp),
                 horizontalArrangement = Arrangement.spacedBy(if (isCompact) 8.dp else 14.dp),
                 verticalItemSpacing = if (isCompact) 8.dp else 14.dp,
@@ -352,6 +448,17 @@ fun SearchView(isCompact: Boolean, onSelect: (WorkCard) -> Unit) {
             ) {
                 items(results) { work ->
                     ArtworkCard(work = work, isCompact = isCompact, onClick = { onSelect(work) })
+                }
+                
+                if (isSearching && results.isNotEmpty()) {
+                    item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    }
                 }
             }
         }
@@ -549,6 +656,8 @@ fun SettingsView(isCompact: Boolean, currentTheme: ThemePreset, onThemeChange: (
 @Composable
 fun ArtworkCard(work: WorkCard, isCompact: Boolean, onClick: () -> Unit) {
     val isInVault = VaultManager.isItemInVault("${work.source}_${work.id}")
+    // 仅 Booru 站点需要本地统一处理模糊，Pixiv/Fanbox 由远端控制
+    val isNsfw = (work.rating == "q" || work.rating == "e") && (work.source != Source.PIXIV && work.source != Source.FANBOX)
 
     Card(
         modifier = Modifier
@@ -567,17 +676,32 @@ fun ArtworkCard(work: WorkCard, isCompact: Boolean, onClick: () -> Unit) {
                 AsyncImage(
                     model = work.thumb,
                     contentDescription = work.title,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(ratio),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(ratio)
+                        .then(if (isNsfw) Modifier.blur(20.dp) else Modifier),
                     contentScale = ContentScale.Crop
                 )
 
-                if (work.isAi) {
-                    Surface(
-                        color = Color.Black.copy(alpha = 0.7f),
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = Modifier.padding(6.dp).align(Alignment.TopStart)
-                    ) {
-                        Text("AI", color = Color.White, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+                Row(
+                    modifier = Modifier.padding(6.dp).align(Alignment.TopStart),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (work.isAi) {
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text("AI", color = Color.White, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+                        }
+                    }
+                    if (isNsfw) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text("R18", color = MaterialTheme.colorScheme.onError, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+                        }
                     }
                 }
 
@@ -708,7 +832,19 @@ fun LightboxView(work: WorkCard, isCompact: Boolean, onDismiss: () -> Unit) {
             modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter)
         ) {
             Column(modifier = Modifier.padding(if (isCompact) 16.dp else 20.dp)) {
-                Text(work.title, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(work.title, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
+                    if (work.isAi) {
+                        Surface(color = Color.White.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp), modifier = Modifier.padding(start = 8.dp)) {
+                            Text("AI 生成", color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        }
+                    }
+                    if (work.rating == "q" || work.rating == "e") {
+                        Surface(color = Color.Red.copy(alpha = 0.6f), shape = RoundedCornerShape(4.dp), modifier = Modifier.padding(start = 8.dp)) {
+                            Text("R18", color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        }
+                    }
+                }
                 Spacer(Modifier.height(4.dp))
                 Text("创作者: ${work.author}  ·  源: ${work.source.displayName}", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
                 if (work.tags.isNotEmpty()) {

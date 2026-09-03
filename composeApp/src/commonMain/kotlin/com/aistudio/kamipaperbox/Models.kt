@@ -4,11 +4,11 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 enum class Source(val displayName: String) {
-    SAFEBOORU("Safebooru"),
     DANBOORU("Danbooru"),
     KONACHAN("Konachan"),
     YANDE("Yande.re"),
-    PIXIV("Pixiv")
+    PIXIV("Pixiv"),
+    FANBOX("Fanbox")
 }
 
 @Serializable

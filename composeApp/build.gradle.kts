@@ -6,6 +6,12 @@ plugins {
     alias(libs.plugins.jetbrainsCompose)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlinxSerialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
+}
+
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 kotlin {
@@ -45,6 +51,9 @@ kotlin {
 
                 implementation(libs.coil.compose)
                 implementation(libs.coil.network.ktor)
+
+                implementation(libs.room.runtime)
+                implementation(libs.sqlite.bundled)
             }
         }
 
@@ -109,4 +118,10 @@ compose.desktop {
             outputBaseDir.set(project.layout.buildDirectory.dir("compose/binaries"))
         }
     }
+}
+
+dependencies {
+    add("kspCommonMainMetadata", libs.room.compiler)
+    add("kspAndroid", libs.room.compiler)
+    add("kspDesktop", libs.room.compiler)
 }
