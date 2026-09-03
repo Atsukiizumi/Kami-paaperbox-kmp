@@ -40,18 +40,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      # 直接让 setup-gradle 安装 Gradle 8.6 并配置到系统 PATH 中
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.6'
 
-      # 确保 gradlew 具备执行权限
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-        shell: bash
-
-      # 构建桌面便携版 (createDistributable)
+      # 构建桌面便携版 (createDistributable)，直接使用系统 gradle，彻底避免 wrapper jar 兼容性问题
       - name: Build Portable Desktop Package
-        run: ./gradlew :composeApp:createDistributable --stacktrace
-        shell: bash
+        run: gradle :composeApp:createDistributable --stacktrace
 
       # Linux 便携包打包
       - name: Compress Linux Portable Bundle
@@ -59,7 +56,6 @@ jobs:
         run: |
           cd composeApp/build/compose/binaries/main/app
           tar -czvf ../../../../../KamiPaperbox-Linux-x64-Portable.tar.gz *
-        shell: bash
 
       # Windows 便携包打包
       - name: Compress Windows Portable Bundle
@@ -67,7 +63,6 @@ jobs:
         run: |
           cd composeApp/build/compose/binaries/main/app
           Compress-Archive -Path * -DestinationPath ../../../../../KamiPaperbox-Windows-x64-Portable.zip
-        shell: pwsh
 
       # 上传测试版 Artifacts (仅 Portable)
       - name: Upload Linux Portable Artifact
@@ -102,12 +97,11 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+        with:
+          gradle-version: '8.6'
 
       - name: Build Android APK
-        run: ./gradlew :composeApp:assembleDebug --stacktrace
+        run: gradle :composeApp:assembleDebug --stacktrace
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
