@@ -118,14 +118,24 @@ data class FanboxResponseBody(
 )
 
 object GalleryRepository {
-    private val httpClient = HttpClient {
-        install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-            })
+    var httpClient = createConfiguredHttpClient(SettingsManager.prefs.value.proxyUrl)
+
+    fun updateProxy(proxyUrl: String) {
+        httpClient.close()
+        httpClient = createConfiguredHttpClient(proxyUrl)
+    }
+
+    private fun createConfiguredHttpClient(proxyUrl: String?): HttpClient {
+        return createHttpClient(proxyUrl).config {
+            install(ContentNegotiation) {
+                json(Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                })
+            }
         }
     }
+
 
     suspend fun downloadBytes(url: String): ByteArray? {
         return try {

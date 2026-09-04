@@ -16,7 +16,8 @@ data class AppPreferences(
     val pixivAccessToken: String = "",
     val pixivRefreshToken: String = "",
     val pixivCookie: String = "",
-    val sauceNaoApiKey: String = ""
+    val sauceNaoApiKey: String = "",
+    val proxyUrl: String = ""
 )
 
 object SettingsManager {
@@ -44,6 +45,12 @@ object SettingsManager {
     fun setSauceNaoApiKey(key: String) {
         _prefs.update { it.copy(sauceNaoApiKey = key) }
     }
+
+    fun setProxyUrl(url: String) {
+        _prefs.update { it.copy(proxyUrl = url) }
+        GalleryRepository.updateProxy(url)
+    }
+
 
     fun setIncludeR18(value: Boolean) {
         _prefs.update { it.copy(includeR18 = value) }
