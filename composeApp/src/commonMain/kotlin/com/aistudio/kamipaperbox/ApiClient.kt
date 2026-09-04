@@ -373,6 +373,10 @@ object GalleryRepository {
                 return@mapNotNull null
             }
 
+            val tagTranslations = tagList.associateWith { tag -> 
+                TagLexiconManager.getTranslation(tag) ?: ""
+            }.filterValues { it.isNotBlank() }
+
             WorkCard(
                 source = source,
                 id = (post.id ?: 0L).toString(),
@@ -381,6 +385,7 @@ object GalleryRepository {
                 thumb = thumb,
                 originalUrl = original,
                 tags = tagList,
+                translatedTags = tagTranslations,
                 width = post.width,
                 height = post.height,
                 rating = post.rating ?: "s",

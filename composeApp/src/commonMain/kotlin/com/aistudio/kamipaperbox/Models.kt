@@ -49,7 +49,8 @@ data class VaultItem(
     val originalUrl: String,
     val savedAt: Long = 0L,
     val tags: List<String> = emptyList(),
-    val localFilePath: String? = null
+    val localFilePath: String? = null,
+    val fileHash: String? = null
 )
 
 @Serializable
@@ -60,5 +61,15 @@ data class HistoryItem(
     val title: String,
     val thumb: String,
     val originalUrl: String,
+    val viewedAt: Long
+)
+
+@Serializable
+data class CreatorHistoryItem(
+    val key: String,
+    val source: Source,
+    val authorId: String,
+    val authorName: String,
+    val thumb: String, // could be avatar or a sample work
     val viewedAt: Long
 )

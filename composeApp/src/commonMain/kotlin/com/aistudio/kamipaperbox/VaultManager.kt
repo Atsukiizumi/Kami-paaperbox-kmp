@@ -23,6 +23,11 @@ object VaultManager {
             entities.map { it.toHistoryItem() }
         }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
+    val creatorHistoryItems: StateFlow<List<CreatorHistoryItem>> = dao.getCreatorHistoryItems()
+        .map { entities ->
+            entities.map { it.toCreatorHistoryItem() }
+        }.stateIn(scope, SharingStarted.Eagerly, emptyList())
+
     private val vaultKeys = vaultItems.map { items -> items.map { it.key }.toSet() }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
@@ -36,21 +41,28 @@ object VaultManager {
             if (isItemInVault(key)) {
                 dao.deleteVaultItem(key)
             } else {
-                dao.insertVaultItem(
-                    VaultEntity(
-                        key = key,
-                        source = work.source.name,
-                        id = work.id,
-                        title = work.title,
-                        author = work.author,
-                        thumb = work.thumb,
-                        originalUrl = work.originalUrl,
-                        savedAt = System.currentTimeMillis(),
-                        tags = work.tags.joinToString(",")
-                    )
-                )
+                QueueManager.enqueue(work)
             }
         }
+    }
+
+    suspend fun saveToVault(work: WorkCard, localPath: String, hash: String) {
+        val key = "${work.source}_${work.id}"
+        dao.insertVaultItem(
+            VaultEntity(
+                key = key,
+                source = work.source.name,
+                id = work.id,
+                title = work.title,
+                author = work.author,
+                thumb = work.thumb,
+                originalUrl = work.originalUrl,
+                savedAt = System.currentTimeMillis(),
+                tags = work.tags.joinToString(","),
+                localFilePath = localPath,
+                fileHash = hash
+            )
+        )
     }
 
     fun recordHistory(work: WorkCard) {
@@ -70,9 +82,31 @@ object VaultManager {
         }
     }
 
+    fun recordCreatorHistory(source: Source, authorId: String, authorName: String, thumb: String) {
+        val key = "${source}_$authorId"
+        scope.launch(Dispatchers.IO) {
+            dao.insertCreatorHistoryItem(
+                CreatorHistoryEntity(
+                    key = key,
+                    source = source.name,
+                    authorId = authorId,
+                    authorName = authorName,
+                    thumb = thumb,
+                    viewedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
     fun clearHistory() {
         scope.launch(Dispatchers.IO) {
             dao.clearHistory()
+        }
+    }
+
+    fun clearCreatorHistory() {
+        scope.launch(Dispatchers.IO) {
+            dao.clearCreatorHistory()
         }
     }
 
@@ -85,7 +119,9 @@ object VaultManager {
         thumb = thumb,
         originalUrl = originalUrl,
         savedAt = savedAt,
-        tags = if (tags.isBlank()) emptyList() else tags.split(",")
+        tags = if (tags.isBlank()) emptyList() else tags.split(","),
+        localFilePath = localFilePath,
+        fileHash = fileHash
     )
 
     private fun HistoryEntity.toHistoryItem() = HistoryItem(
@@ -95,6 +131,15 @@ object VaultManager {
         title = title,
         thumb = thumb,
         originalUrl = originalUrl,
+        viewedAt = viewedAt
+    )
+
+    private fun CreatorHistoryEntity.toCreatorHistoryItem() = CreatorHistoryItem(
+        key = key,
+        source = Source.valueOf(source),
+        authorId = authorId,
+        authorName = authorName,
+        thumb = thumb,
         viewedAt = viewedAt
     )
 }

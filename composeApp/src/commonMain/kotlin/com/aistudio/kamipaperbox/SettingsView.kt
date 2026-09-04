@@ -227,9 +227,83 @@ fun SettingsView(
             }
         }
 
+        // 5. 存储仓储
+        Text("画匣与存储仓储", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text("原图存储位置 (Vault Path)", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = prefs.vaultPath.ifBlank { getDefaultStorageDirectory() },
+                    onValueChange = { SettingsManager.setVaultPath(it) },
+                    placeholder = { Text(getDefaultStorageDirectory()) },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    singleLine = true
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "指定保存原始大图与动图的本地路径。KMP 端暂不支持自动文件夹选择，请手动输入合法绝对路径。画匣的校验功能将对齐此目录。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    lineHeight = 18.sp
+                )
+            }
+        }
+
+        // 6. 标签词典导入
+        Text("高级映射：双向标签词典", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+
+        var jsonInput by remember { mutableStateOf("") }
+        var importSuccess by remember { mutableStateOf<Boolean?>(null) }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text("导入自定义 JSON 映射", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = jsonInput,
+                    onValueChange = { jsonInput = it },
+                    placeholder = { Text("""{"1girl": "单人女孩", "landscape": "风景"}""") },
+                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    maxLines = 5
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "粘贴如上格式的 JSON 对象覆盖或追加本地词库。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(onClick = { 
+                        TagLexiconManager.loadLexiconFromJson(jsonInput)
+                        importSuccess = true
+                        jsonInput = ""
+                    }) {
+                        Text("应用映射")
+                    }
+                }
+                if (importSuccess == true) {
+                    Spacer(Modifier.height(4.dp))
+                    Text("导入成功！", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+
         Spacer(Modifier.height(28.dp))
 
-        // 5. 架构与致谢说明
+        // 7. 架构与致谢说明
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(12.dp)

@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.launch
 
 @Composable
 fun LightboxView(
@@ -48,6 +50,9 @@ fun LightboxView(
     LaunchedEffect(work) {
         VaultManager.recordHistory(work)
     }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     Box(
         modifier = Modifier
@@ -185,6 +190,45 @@ fun LightboxView(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                val snackbarHostState = remember { SnackbarHostState() }
+                
+                IconButton(
+                    onClick = {
+                        try {
+                            uriHandler.openUri(currentDisplayUrl)
+                        } catch (e: Exception) {
+                            coroutineScope.launch { snackbarHostState.showSnackbar("无法打开链接") }
+                        }
+                    },
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.55f))
+                ) {
+                    Icon(
+                        Icons.Default.Public,
+                        contentDescription = "在浏览器中打开",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(currentDisplayUrl))
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("图片链接已复制到剪贴板")
+                        }
+                    },
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.55f))
+                ) {
+                    Icon(
+                        Icons.Default.Share,
+                        contentDescription = "复制链接",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
                 Button(
                     onClick = { VaultManager.toggleVault(work) },
                     colors = ButtonDefaults.buttonColors(
@@ -213,6 +257,33 @@ fun LightboxView(
                 .align(Alignment.BottomCenter)
         ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                // 如果有多图，在此处显示缩略图导航带 (对标 v0.8.51 底部缩略图分页条)
+                if (imageList.size > 1) {
+                    androidx.compose.foundation.lazy.LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(imageList.size) { index ->
+                            val url = imageList[index]
+                            val isSelected = index == currentPageIndex
+                            
+                            AsyncImage(
+                                model = url,
+                                contentDescription = "Page ${index + 1}",
+                                modifier = Modifier
+                                    .size(if (isSelected) 56.dp else 48.dp)
+                                    .clickable { currentPageIndex = index }
+                                    .background(Color.DarkGray, RoundedCornerShape(8.dp))
+                                    .padding(if (isSelected) 2.dp else 0.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
+
                 // 标题与勋章
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -363,5 +434,10 @@ fun LightboxView(
                 }
             }
         }
+        
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.Center)
+        )
     }
 }

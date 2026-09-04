@@ -10,12 +10,25 @@ data class AppPreferences(
     val aiFilterMode: AiFilterMode = AiFilterMode.BADGE_ONLY,
     val usePixivMirror: Boolean = true,
     val themePreset: ThemePreset = ThemePreset.WASHI,
-    val searchHistory: List<String> = listOf("landscape", "original", "1girl", "genshin_impact", "cyberpunk")
+    val searchHistory: List<String> = listOf("landscape", "original", "1girl", "genshin_impact", "cyberpunk"),
+    val vaultPath: String = "",
+    val gridColumns: Int = 2
 )
 
 object SettingsManager {
     private val _prefs = MutableStateFlow(AppPreferences())
     val prefs = _prefs.asStateFlow()
+
+    val vaultPath = MutableStateFlow("") // Expose directly for simplicity, or sync with prefs
+
+    fun setVaultPath(path: String) {
+        vaultPath.value = path
+        _prefs.update { it.copy(vaultPath = path) }
+    }
+
+    fun setGridColumns(columns: Int) {
+        _prefs.update { it.copy(gridColumns = columns) }
+    }
 
     fun setIncludeR18(value: Boolean) {
         _prefs.update { it.copy(includeR18 = value) }

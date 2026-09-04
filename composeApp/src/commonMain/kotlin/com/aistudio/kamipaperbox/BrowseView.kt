@@ -31,14 +31,14 @@ fun BrowseView(
     var currentPage by remember { mutableStateOf(1) }
     val scope = rememberCoroutineScope()
 
-    fun refresh(source: Source) {
+    fun loadPage(source: Source, page: Int) {
         scope.launch {
             isLoading = true
-            currentPage = 1
+            currentPage = page
             posts = GalleryRepository.fetchPosts(
                 source = source,
-                page = 1,
-                limit = 40,
+                page = page,
+                limit = 50,
                 includeR18 = prefs.includeR18,
                 aiFilterMode = prefs.aiFilterMode,
                 usePixivMirror = prefs.usePixivMirror
@@ -48,26 +48,7 @@ fun BrowseView(
     }
 
     LaunchedEffect(selectedSource, prefs.includeR18, prefs.aiFilterMode, prefs.usePixivMirror) {
-        refresh(selectedSource)
-    }
-
-    suspend fun loadMore() {
-        if (isLoading) return
-        isLoading = true
-        val nextPage = currentPage + 1
-        val newPosts = GalleryRepository.fetchPosts(
-            source = selectedSource,
-            page = nextPage,
-            limit = 40,
-            includeR18 = prefs.includeR18,
-            aiFilterMode = prefs.aiFilterMode,
-            usePixivMirror = prefs.usePixivMirror
-        )
-        if (newPosts.isNotEmpty()) {
-            posts = posts + newPosts
-            currentPage = nextPage
-        }
-        isLoading = false
+        loadPage(selectedSource, 1)
     }
 
     Column(
@@ -112,8 +93,21 @@ fun BrowseView(
                     )
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+                // 列数切换器
+                listOf(2, 4, 6, 9).forEach { cols ->
+                    FilterChip(
+                        selected = prefs.gridColumns == cols,
+                        onClick = { SettingsManager.setGridColumns(cols) },
+                        label = { Text("$cols") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    )
+                }
+
                 IconButton(
-                    onClick = { refresh(selectedSource) },
+                    onClick = { loadPage(selectedSource, currentPage) },
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
@@ -139,7 +133,7 @@ fun BrowseView(
                         fontSize = 13.sp
                     )
                     Spacer(Modifier.height(10.dp))
-                    Button(onClick = { refresh(selectedSource) }) {
+                    Button(onClick = { loadPage(selectedSource, 1) }) {
                         Text("重试刷新")
                     }
                 }
@@ -147,26 +141,18 @@ fun BrowseView(
         } else {
             val gridState = rememberLazyStaggeredGridState()
 
-            val shouldLoadMore = remember {
-                derivedStateOf {
-                    val lastVisibleItemIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                    lastVisibleItemIndex >= posts.size - 8 && posts.isNotEmpty() && !isLoading
-                }
-            }
-
-            LaunchedEffect(shouldLoadMore.value) {
-                if (shouldLoadMore.value) {
-                    loadMore()
-                }
+            // 滚动回顶部
+            LaunchedEffect(currentPage, selectedSource) {
+                gridState.scrollToItem(0)
             }
 
             LazyVerticalStaggeredGrid(
                 state = gridState,
-                columns = StaggeredGridCells.Adaptive(minSize = if (isCompact) 160.dp else 220.dp),
+                columns = StaggeredGridCells.Fixed(prefs.gridColumns),
                 horizontalArrangement = Arrangement.spacedBy(if (isCompact) 8.dp else 14.dp),
                 verticalItemSpacing = if (isCompact) 8.dp else 14.dp,
                 contentPadding = PaddingValues(bottom = 24.dp),
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.weight(1f).fillMaxWidth()
             ) {
                 items(posts, key = { "${it.source}_${it.id}_${it.thumb}" }) { work ->
                     ArtworkCard(
@@ -175,17 +161,38 @@ fun BrowseView(
                         onClick = { onSelect(work) }
                     )
                 }
+            }
 
-                if (isLoading && posts.isNotEmpty()) {
-                    item(span = StaggeredGridItemSpan.FullLine) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        }
+            // 底部翻页控制器
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 2.dp,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = { if (currentPage > 1) loadPage(selectedSource, currentPage - 1) },
+                        enabled = currentPage > 1
+                    ) {
+                        Text("上一页")
+                    }
+                    
+                    Text(
+                        "第 $currentPage 页", 
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    
+                    TextButton(
+                        onClick = { loadPage(selectedSource, currentPage + 1) },
+                        enabled = posts.size == 50 // Assume more pages if full page returned
+                    ) {
+                        Text("下一页")
                     }
                 }
             }

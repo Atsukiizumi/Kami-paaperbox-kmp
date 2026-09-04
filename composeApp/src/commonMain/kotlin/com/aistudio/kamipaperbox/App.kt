@@ -28,6 +28,7 @@ fun MainAppView() {
     val prefs by SettingsManager.prefs.collectAsState()
     var currentScreen by remember { mutableStateOf(Screen.BROWSE) }
     var selectedWork by remember { mutableStateOf<WorkCard?>(null) }
+    var selectedCreator by remember { mutableStateOf<Pair<String, Source>?>(null) }
     
     // 用于跨页面（如详情页点击标签/作者）携带到检索页面的参数
     var searchTargetQuery by remember { mutableStateOf<String?>(null) }
@@ -85,7 +86,8 @@ fun MainAppView() {
                             isCompact = true,
                             initialSearchQuery = searchTargetQuery,
                             initialSearchSource = searchTargetSource,
-                            onSelect = { selectedWork = it }
+                            onSelect = { selectedWork = it },
+                            onSelectCreator = { author, source -> selectedCreator = Pair(author, source) }
                         )
                     }
                 }
@@ -155,7 +157,8 @@ fun MainAppView() {
                             isCompact = false,
                             initialSearchQuery = searchTargetQuery,
                             initialSearchSource = searchTargetSource,
-                            onSelect = { selectedWork = it }
+                            onSelect = { selectedWork = it },
+                            onSelectCreator = { author, source -> selectedCreator = Pair(author, source) }
                         )
                     }
                 }
@@ -184,15 +187,25 @@ fun MainAppView() {
                         },
                         onAuthorClick = { author, source ->
                             selectedWork = null
-                            val authorQuery = if (source == Source.DANBOORU || source == Source.KONACHAN || source == Source.YANDE) {
-                                "artist:$author"
-                            } else {
-                                author
-                            }
-                            searchTargetQuery = authorQuery
-                            searchTargetSource = source
-                            currentScreen = Screen.SEARCH
+                            selectedCreator = Pair(author, source)
                         }
+                    )
+                }
+            }
+
+            // 画师主页浮层 (Creator Profile)
+            AnimatedVisibility(
+                visible = selectedCreator != null,
+                enter = slideInVertically(initialOffsetY = { it }),
+                exit = slideOutVertically(targetOffsetY = { it })
+            ) {
+                selectedCreator?.let { (author, source) ->
+                    CreatorView(
+                        author = author,
+                        source = source,
+                        isCompact = isCompactScreen,
+                        onDismiss = { selectedCreator = null },
+                        onSelectWork = { selectedWork = it }
                     )
                 }
             }
@@ -206,7 +219,8 @@ fun AppScreenContent(
     isCompact: Boolean,
     initialSearchQuery: String?,
     initialSearchSource: Source?,
-    onSelect: (WorkCard) -> Unit
+    onSelect: (WorkCard) -> Unit,
+    onSelectCreator: (String, Source) -> Unit
 ) {
     when (screen) {
         Screen.BROWSE -> BrowseView(isCompact = isCompact, onSelect = onSelect)
@@ -217,7 +231,7 @@ fun AppScreenContent(
             onSelect = onSelect
         )
         Screen.VAULT -> VaultView(isCompact = isCompact, onSelect = onSelect)
-        Screen.HISTORY -> HistoryView(isCompact = isCompact, onSelect = onSelect)
+        Screen.HISTORY -> HistoryView(isCompact = isCompact, onSelect = onSelect, onAuthorSelect = onSelectCreator)
         Screen.SETTINGS -> SettingsView(isCompact = isCompact)
     }
 }
