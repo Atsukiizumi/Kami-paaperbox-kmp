@@ -1,0 +1,2 @@
+                Source.KONACHAN -> fetchMoebooru(Source.KONACHAN, "https://konachan.com", query, page, limit, includeR18)
+                Source.YANDE -> fetchMoebooru(Source.YANDE, "https://yande.re", query, page, limit, includeR18)

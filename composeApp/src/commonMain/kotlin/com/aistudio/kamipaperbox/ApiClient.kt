@@ -10,7 +10,16 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-// Existing models
+@Serializable
+data class MoebooruPost(
+    val id: Int? = null,
+    val file_url: String? = null,
+    val sample_url: String? = null,
+    val preview_url: String? = null,
+    val tags: String? = null,
+    val source: String? = null
+)
+
 @Serializable
 data class DanbooruPost(
     val id: Int? = null,
@@ -59,7 +68,6 @@ data class PixivTag(
     val translated_name: String? = null
 )
 
-// Fanbox models (mock/simplified)
 @Serializable
 data class FanboxPost(
     val id: String,
@@ -113,8 +121,8 @@ object GalleryRepository {
                 Source.DANBOORU -> fetchDanbooru(query, page, limit, includeR18, aiFilterMode)
                 Source.PIXIV -> fetchPixiv(query, page, limit, includeR18, aiFilterMode, usePixivMirror)
                 Source.FANBOX -> fetchFanbox(query, page, limit)
-                Source.KONACHAN -> emptyList() // Not implemented yet
-                Source.YANDE -> emptyList() // Not implemented yet
+                Source.KONACHAN -> fetchMoebooru(Source.KONACHAN, "https://konachan.com", query, page, limit, includeR18)
+                Source.YANDE -> fetchMoebooru(Source.YANDE, "https://yande.re", query, page, limit, includeR18)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -181,7 +189,7 @@ object GalleryRepository {
         val offset = (page - 1) * 30
         
         val url = if (usePixivMirror) {
-            "https://api.obfs.dev/api/pixiv/search" // Example mirror
+            "https://api.obfs.dev/api/pixiv/search"
         } else {
             "https://app-api.pixiv.net/v1/search/illust"
         }
@@ -199,7 +207,6 @@ object GalleryRepository {
                 header("User-Agent", "PixivIOSApp/7.6.2 (iOS 14.6; iPhone13,2)")
                 
                 if (trimmedQuery.isNotBlank()) {
-                    // 支持空格分割多 tag
                     parameter("word", trimmedQuery)
                 } else {
                     parameter("word", "オリジナル")
@@ -215,7 +222,6 @@ object GalleryRepository {
         }
 
         return response.illusts.mapNotNull { illust ->
-            // Filter AI
             val isAi = illust.tags?.any { it.name.contains("AI") || it.name.contains("novelai") } == true
             if (aiFilterMode == AiFilterMode.HIDE_AI && isAi) return@mapNotNull null
 
@@ -250,13 +256,12 @@ object GalleryRepository {
         page: Int,
         limit: Int
     ): List<WorkCard> {
-        val creatorId = query.trim().ifBlank { "mignon" } // default for demo
+        val creatorId = query.trim().ifBlank { "mignon" }
         val response: FanboxResponse = try {
             httpClient.get("https://api.fanbox.cc/post.listCreator") {
                 parameter("creatorId", creatorId)
                 parameter("limit", limit)
                 header("Origin", "https://www.fanbox.cc")
-                // In a real implementation, a valid FANBOXSESSID cookie is required here for R18/paid content.
             }.body()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -282,5 +287,48 @@ object GalleryRepository {
             }
         }
         return cards
+    }
+
+    private suspend fun fetchMoebooru(
+        source: Source,
+        baseUrl: String,
+        query: String,
+        page: Int,
+        limit: Int,
+        includeR18: Boolean
+    ): List<WorkCard> {
+        val trimmedQuery = query.trim()
+        val tagsList = mutableListOf<String>()
+
+        if (trimmedQuery.isNotBlank()) {
+            tagsList.addAll(trimmedQuery.split(" ").take(2))
+        }
+
+        if (!includeR18) {
+            tagsList.add("rating:safe")
+        }
+
+        val tagsQuery = tagsList.joinToString(" ")
+
+        val response: List<MoebooruPost> = httpClient.get("$baseUrl/post.json") {
+            if (tagsQuery.isNotBlank()) {
+                parameter("tags", tagsQuery)
+            }
+            parameter("page", page)
+            parameter("limit", limit)
+        }.body()
+
+        return response.filter { it.file_url != null || it.sample_url != null }.map { post ->
+            val preview = post.preview_url ?: post.sample_url ?: post.file_url ?: ""
+            val original = post.sample_url ?: post.file_url ?: preview
+            WorkCard(
+                id = post.id?.toString() ?: "",
+                thumb = preview,
+                originalUrl = original,
+                title = "${source.displayName} #${post.id}",
+                author = post.source?.takeIf { it.isNotBlank() } ?: "Unknown",
+                source = source
+            )
+        }
     }
 }
