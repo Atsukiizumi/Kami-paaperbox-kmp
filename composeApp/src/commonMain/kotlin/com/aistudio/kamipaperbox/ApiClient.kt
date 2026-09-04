@@ -1,57 +1,46 @@
 package com.aistudio.kamipaperbox
 
-import io.ktor.client.*
-import io.ktor.client.call.*
-import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.plugins.*
-import io.ktor.client.request.*
-import io.ktor.serialization.kotlinx.json.*
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.parameter
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
+// Existing models
 @Serializable
-data class BooruPost(
-    val id: Long? = null,
-    val tags: String? = null,
-    val tag_string: String? = null, // Danbooru uses tag_string
-    val preview_url: String? = null,
+data class DanbooruPost(
+    val id: Int? = null,
     val file_url: String? = null,
     val large_file_url: String? = null,
-    val width: Int? = null,
-    val height: Int? = null,
-    val rating: String? = "s"
+    val preview_file_url: String? = null,
+    val tag_string: String? = null,
+    val source: String? = null
 )
 
 @Serializable
 data class PixivResponse(
-    val illustrations: List<PixivIllustration> = emptyList()
+    val illusts: List<PixivIllust> = emptyList()
 )
 
 @Serializable
-data class PixivIllustration(
-    val id: Long,
+data class PixivIllust(
+    val id: Int,
     val title: String,
-    val user: PixivUser,
     val image_urls: PixivImageUrls,
     val meta_single_page: PixivMetaSinglePage? = null,
-    val meta_pages: List<PixivMetaPage>? = null,
-    val tags: List<PixivTag> = emptyList(),
-    val x_restrict: Int = 0,
-    val illust_ai_type: Int = 0
-)
-
-@Serializable
-data class PixivUser(
-    val id: Long,
-    val name: String,
-    val account: String
+    val meta_pages: List<PixivMetaPage>? = emptyList(),
+    val tags: List<PixivTag>? = emptyList()
 )
 
 @Serializable
 data class PixivImageUrls(
-    val medium: String,
-    val large: String? = null,
-    val square_medium: String? = null
+    val square_medium: String? = null,
+    val medium: String? = null,
+    val large: String? = null
 )
 
 @Serializable
@@ -61,7 +50,7 @@ data class PixivMetaSinglePage(
 
 @Serializable
 data class PixivMetaPage(
-    val image_urls: PixivImageUrls
+    val image_urls: PixivImageUrls? = null
 )
 
 @Serializable
@@ -70,49 +59,34 @@ data class PixivTag(
     val translated_name: String? = null
 )
 
+// Fanbox models (mock/simplified)
 @Serializable
-data class FanboxCreatorResponse(
-    val body: FanboxCreatorBody? = null
-)
-
-@Serializable
-data class FanboxCreatorBody(
-    val items: List<FanboxPostItem> = emptyList(),
-    val nextUrl: String? = null
-)
-
-@Serializable
-data class FanboxPostItem(
+data class FanboxPost(
     val id: String,
     val title: String,
-    val feeRequired: Int? = 0,
-    val publishedDatetime: String? = null,
     val coverImageUrl: String? = null,
-    val user: FanboxUser? = null,
-    val tags: List<String> = emptyList(),
-    val isRestricted: Boolean = false,
-    val body: FanboxPostBody? = null
+    val body: FanboxBody? = null
 )
 
 @Serializable
-data class FanboxPostBody(
-    val type: String? = null,
-    val text: String? = null,
-    val images: List<FanboxImageItem>? = null,
-    val imageMap: Map<String, FanboxImageItem>? = null
+data class FanboxBody(
+    val images: List<FanboxImage>? = emptyList()
 )
 
 @Serializable
-data class FanboxImageItem(
-    val id: String,
-    val originalUrl: String? = null,
-    val thumbnailUrl: String? = null
+data class FanboxImage(
+    val originalUrl: String,
+    val thumbnailUrl: String
 )
 
 @Serializable
-data class FanboxUser(
-    val userId: String,
-    val name: String
+data class FanboxResponse(
+    val body: FanboxResponseBody
+)
+
+@Serializable
+data class FanboxResponseBody(
+    val items: List<FanboxPost>
 )
 
 object GalleryRepository {
@@ -121,75 +95,26 @@ object GalleryRepository {
             json(Json {
                 ignoreUnknownKeys = true
                 isLenient = true
-                explicitNulls = false
             })
         }
-        defaultRequest {
-            header("User-Agent", "KamiPaperbox/1.0 (Android/Desktop Multiplatform App)")
-        }
-    }
-
-    private val curatedFanboxCreators = listOf(
-        "c-row", "mignon", "morikuraen", "kantoku", "fuzichoco", "torino", "anmi"
-    )
-
-    private fun normalizeImageUrl(url: String, useMirror: Boolean): String {
-        if (!useMirror || url.isBlank()) return url
-        return url
-            .replace("https://i.pximg.net/", "https://i.pixiv.re/")
-            .replace("http://i.pximg.net/", "https://i.pixiv.re/")
-            .replace("https://pixiv.pximg.net/", "https://i.pixiv.re/")
     }
 
     suspend fun fetchPosts(
-        source: Source = Source.DANBOORU,
-        page: Int = 1,
+        source: Source,
         query: String = "",
+        page: Int = 1,
         limit: Int = 40,
-        includeR18: Boolean = SettingsManager.prefs.value.includeR18,
-        aiFilterMode: AiFilterMode = SettingsManager.prefs.value.aiFilterMode,
-        usePixivMirror: Boolean = SettingsManager.prefs.value.usePixivMirror
+        includeR18: Boolean = false,
+        aiFilterMode: AiFilterMode = AiFilterMode.SHOW_ALL,
+        usePixivMirror: Boolean = false
     ): List<WorkCard> {
         return try {
             when (source) {
-                Source.DANBOORU -> fetchGenericBooru(
-                    baseUrl = "https://danbooru.donmai.us/posts.json",
-                    source = source,
-                    page = page,
-                    query = query,
-                    limit = limit,
-                    includeR18 = includeR18,
-                    aiFilterMode = aiFilterMode
-                )
-                Source.KONACHAN -> fetchGenericBooru(
-                    baseUrl = "https://konachan.com/post.json",
-                    source = source,
-                    page = page,
-                    query = query,
-                    limit = limit,
-                    includeR18 = includeR18,
-                    aiFilterMode = aiFilterMode
-                )
-                Source.YANDE -> fetchGenericBooru(
-                    baseUrl = "https://yande.re/post.json",
-                    source = source,
-                    page = page,
-                    query = query,
-                    limit = limit,
-                    includeR18 = includeR18,
-                    aiFilterMode = aiFilterMode
-                )
-                Source.PIXIV -> fetchPixiv(
-                    page = page,
-                    query = query,
-                    includeR18 = includeR18,
-                    useMirror = usePixivMirror
-                )
-                Source.FANBOX -> fetchFanbox(
-                    page = page,
-                    query = query,
-                    useMirror = usePixivMirror
-                )
+                Source.DANBOORU -> fetchDanbooru(query, page, limit, includeR18, aiFilterMode)
+                Source.PIXIV -> fetchPixiv(query, page, limit, includeR18, aiFilterMode, usePixivMirror)
+                Source.FANBOX -> fetchFanbox(query, page, limit)
+                Source.KONACHAN -> emptyList() // Not implemented yet
+                Source.YANDE -> emptyList() // Not implemented yet
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -197,200 +122,165 @@ object GalleryRepository {
         }
     }
 
-    private suspend fun fetchPixiv(
-        page: Int,
+    private suspend fun fetchDanbooru(
         query: String,
+        page: Int,
+        limit: Int,
         includeR18: Boolean,
-        useMirror: Boolean
+        aiFilterMode: AiFilterMode
     ): List<WorkCard> {
         val trimmedQuery = query.trim()
-        val url = if (trimmedQuery.isBlank()) {
-            "https://app-api.pixiv.net/v1/illust/recommended"
+        val tagsList = mutableListOf<String>()
+
+        if (trimmedQuery.isNotBlank()) {
+            tagsList.addAll(trimmedQuery.split(" ").take(2))
+        }
+
+        if (!includeR18) {
+            tagsList.add("rating:general")
+        }
+
+        when (aiFilterMode) {
+            AiFilterMode.HIDE_AI -> tagsList.add("-ai_generated")
+            else -> {}
+        }
+
+        val tagsQuery = tagsList.joinToString(" ")
+
+        val response: List<DanbooruPost> = httpClient.get("https://danbooru.donmai.us/posts.json") {
+            if (tagsQuery.isNotBlank()) {
+                parameter("tags", tagsQuery)
+            }
+            parameter("page", page)
+            parameter("limit", limit)
+        }.body()
+
+        return response.filter { it.file_url != null || it.large_file_url != null }.map { post ->
+            val preview = post.preview_file_url ?: post.large_file_url ?: post.file_url ?: ""
+            val original = post.large_file_url ?: post.file_url ?: preview
+            WorkCard(
+                id = post.id?.toString() ?: "",
+                thumb = preview,
+                originalUrl = original,
+                title = "Danbooru #${post.id}",
+                author = post.source ?: "Unknown",
+                source = Source.DANBOORU
+            )
+        }
+    }
+
+    private suspend fun fetchPixiv(
+        query: String,
+        page: Int,
+        limit: Int,
+        includeR18: Boolean,
+        aiFilterMode: AiFilterMode,
+        usePixivMirror: Boolean
+    ): List<WorkCard> {
+        val trimmedQuery = query.trim()
+        val offset = (page - 1) * 30
+        
+        val url = if (usePixivMirror) {
+            "https://api.obfs.dev/api/pixiv/search" // Example mirror
         } else {
             "https://app-api.pixiv.net/v1/search/illust"
         }
         
+        val accessToken = PixivAuthManager.getValidAccessToken()
+        
         val response: PixivResponse = try {
             httpClient.get(url) {
+                if (accessToken != null) {
+                    header("Authorization", "Bearer $accessToken")
+                }
+                header("App-OS", "ios")
+                header("App-OS-Version", "14.6")
+                header("App-Version", "7.6.2")
+                header("User-Agent", "PixivIOSApp/7.6.2 (iOS 14.6; iPhone13,2)")
+                
                 if (trimmedQuery.isNotBlank()) {
                     // 支持空格分割多 tag
                     parameter("word", trimmedQuery)
-                    parameter("search_target", "partial_match_for_tags")
-                    parameter("sort", "date_desc")
+                } else {
+                    parameter("word", "オリジナル")
                 }
-                parameter("offset", (page - 1) * 30)
-                // 远端控制 R18 过滤逻辑
-                parameter("include_restrict_safe", if (includeR18) 0 else 1)
-                parameter("restrict", if (includeR18) "all" else "safe")
+                parameter("search_target", "partial_match_for_tags")
+                parameter("sort", "date_desc")
+                parameter("offset", offset)
+                parameter("filter", "for_ios")
             }.body()
         } catch (e: Exception) {
-            PixivResponse()
+            e.printStackTrace()
+            return emptyList()
         }
 
-        return response.illustrations.map { illust ->
-            val thumbUrl = normalizeImageUrl(illust.image_urls.medium, useMirror)
-            val originalUrl = normalizeImageUrl(
-                illust.meta_single_page?.original_image_url ?: illust.image_urls.large ?: illust.image_urls.medium,
-                useMirror
-            )
+        return response.illusts.mapNotNull { illust ->
+            // Filter AI
+            val isAi = illust.tags?.any { it.name.contains("AI") || it.name.contains("novelai") } == true
+            if (aiFilterMode == AiFilterMode.HIDE_AI && isAi) return@mapNotNull null
 
-            // 多图 (Manga/图集) 解析
-            val allPages = if (illust.meta_pages != null && illust.meta_pages.isNotEmpty()) {
-                illust.meta_pages.map { pageItem ->
-                    normalizeImageUrl(pageItem.image_urls.large ?: pageItem.image_urls.medium, useMirror)
-                }
-            } else {
-                listOf(originalUrl)
-            }
+            val preview = illust.image_urls.medium ?: illust.image_urls.square_medium ?: return@mapNotNull null
+            val original = illust.meta_single_page?.original_image_url 
+                ?: illust.meta_pages?.firstOrNull()?.image_urls?.large
+                ?: illust.image_urls.large 
+                ?: preview
 
-            val tagTranslations = illust.tags
-                .filter { !it.translated_name.isNullOrBlank() }
-                .associate { it.name to it.translated_name!! }
+            val finalPreview = if (usePixivMirror && !preview.contains("obfs.dev")) {
+                preview.replace("i.pximg.net", "i.pixiv.re")
+            } else preview
+            
+            val finalOriginal = if (usePixivMirror && !original.contains("obfs.dev")) {
+                original.replace("i.pximg.net", "i.pixiv.re")
+            } else original
 
             WorkCard(
-                source = Source.PIXIV,
                 id = illust.id.toString(),
+                thumb = finalPreview,
+                originalUrl = finalOriginal,
                 title = illust.title,
-                author = illust.user.name,
-                authorId = illust.user.id.toString(),
-                thumb = thumbUrl,
-                originalUrl = originalUrl,
-                pageCount = allPages.size,
-                additionalImages = allPages,
-                tags = illust.tags.map { it.name },
-                translatedTags = tagTranslations,
-                rating = if (illust.x_restrict > 0) "e" else "s",
-                isAi = illust.illust_ai_type == 2
+                author = "Pixiv #${illust.id}",
+                source = Source.PIXIV,
+                isAi = isAi
             )
         }
     }
 
     private suspend fun fetchFanbox(
-        page: Int,
         query: String,
-        useMirror: Boolean
+        page: Int,
+        limit: Int
     ): List<WorkCard> {
-        val targetCreator = if (query.isNotBlank()) {
-            query.trim().split(" ").firstOrNull() ?: query.trim()
-        } else {
-            val index = ((page - 1).coerceAtLeast(0)) % curatedFanboxCreators.size
-            curatedFanboxCreators[index]
-        }
-
-        val url = "https://api.fanbox.cc/post.listCreator"
-        
-        return try {
-            val response: FanboxCreatorResponse = httpClient.get(url) {
+        val creatorId = query.trim().ifBlank { "mignon" } // default for demo
+        val response: FanboxResponse = try {
+            httpClient.get("https://api.fanbox.cc/post.listCreator") {
+                parameter("creatorId", creatorId)
+                parameter("limit", limit)
                 header("Origin", "https://www.fanbox.cc")
-                header("Referer", "https://www.fanbox.cc/")
-                parameter("creatorId", targetCreator)
-                parameter("limit", 20)
+                // In a real implementation, a valid FANBOXSESSID cookie is required here for R18/paid content.
             }.body()
-
-            val items = response.body?.items ?: emptyList()
-            items.mapNotNull { item ->
-                // 提取博文包含的全部图片序列
-                val bodyImages = item.body?.images?.mapNotNull { it.originalUrl ?: it.thumbnailUrl }
-                    ?: item.body?.imageMap?.values?.mapNotNull { it.originalUrl ?: it.thumbnailUrl }
-                    ?: emptyList()
-
-                val allImages = (listOfNotNull(item.coverImageUrl) + bodyImages)
-                    .distinct()
-                    .map { normalizeImageUrl(it, useMirror) }
-
-                if (allImages.isEmpty()) return@mapNotNull null
-
-                val isLocked = (item.feeRequired ?: 0) > 0 || item.isRestricted
-                val postThumb = allImages.first()
-                val postOriginal = allImages.first()
-
-                WorkCard(
-                    source = Source.FANBOX,
-                    id = item.id,
-                    title = item.title,
-                    author = item.user?.name ?: targetCreator,
-                    authorId = item.user?.userId ?: targetCreator,
-                    thumb = postThumb,
-                    originalUrl = postOriginal,
-                    pageCount = allImages.size,
-                    additionalImages = allImages,
-                    tags = item.tags.ifEmpty { listOf(targetCreator, "fanbox") },
-                    rating = "s",
-                    isAi = false,
-                    isRestricted = isLocked
-                )
-            }
         } catch (e: Exception) {
             e.printStackTrace()
-            emptyList()
-        }
-    }
-
-    private suspend fun fetchGenericBooru(
-        baseUrl: String,
-        source: Source,
-        page: Int,
-        query: String,
-        limit: Int,
-        includeR18: Boolean,
-        aiFilterMode: AiFilterMode
-    ): List<WorkCard> {
-        // 构建支持空格分割的多 tag 查询，并注入 R18/AI 规则
-        val tagTokens = query.trim().split(" ").filter { it.isNotBlank() }.toMutableList()
-
-        if (aiFilterMode == AiFilterMode.HIDE_AI && tagTokens.none { it.contains("ai_generated") }) {
-            tagTokens.add("-ai_generated")
+            return emptyList()
         }
 
-        if (!includeR18 && tagTokens.none { it.startsWith("rating:") }) {
-            val safeRatingTag = if (source == Source.DANBOORU) "rating:g" else "rating:s"
-            tagTokens.add(safeRatingTag)
-        }
+        val cards = mutableListOf<WorkCard>()
+        response.body.items.forEach { post ->
+            val preview = post.coverImageUrl ?: post.body?.images?.firstOrNull()?.thumbnailUrl
+            val original = post.body?.images?.firstOrNull()?.originalUrl ?: preview
 
-        val finalTagString = tagTokens.joinToString(" ")
-
-        val rawPosts: List<BooruPost> = httpClient.get(baseUrl) {
-            parameter("limit", limit)
-            parameter("page", page)
-            if (finalTagString.isNotBlank()) parameter("tags", finalTagString)
-        }.body()
-
-        return rawPosts.mapNotNull { post ->
-            val tagList = (post.tag_string ?: post.tags ?: "").split(" ").filter { it.isNotBlank() }
-            val original = post.file_url ?: post.large_file_url ?: ""
-            val thumb = post.preview_url ?: original
-
-            if (original.isBlank() && thumb.isBlank()) return@mapNotNull null
-
-            val isAiPost = tagList.any { 
-                it.contains("ai_generated") || 
-                it.contains("stable_diffusion") || 
-                it.contains("novelai") || 
-                it.contains("midjourney") 
+            if (preview != null && original != null) {
+                cards.add(
+                    WorkCard(
+                        id = post.id,
+                        thumb = preview,
+                        originalUrl = original,
+                        title = post.title,
+                        author = creatorId,
+                        source = Source.FANBOX
+                    )
+                )
             }
-
-            if (aiFilterMode == AiFilterMode.HIDE_AI && isAiPost) {
-                return@mapNotNull null
-            }
-
-            val tagTranslations = tagList.associateWith { tag -> 
-                TagLexiconManager.getTranslation(tag) ?: ""
-            }.filterValues { it.isNotBlank() }
-
-            WorkCard(
-                source = source,
-                id = (post.id ?: 0L).toString(),
-                title = "#${post.id} ${tagList.take(2).joinToString(" ")}",
-                author = tagList.find { it.startsWith("artist:") }?.removePrefix("artist:") ?: "Unknown",
-                thumb = thumb,
-                originalUrl = original,
-                tags = tagList,
-                translatedTags = tagTranslations,
-                width = post.width,
-                height = post.height,
-                rating = post.rating ?: "s",
-                isAi = isAiPost
-            )
         }
+        return cards
     }
 }

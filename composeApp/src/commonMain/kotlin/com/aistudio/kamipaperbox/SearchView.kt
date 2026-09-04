@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +21,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -39,8 +41,21 @@ fun SearchView(
     var isSearching by remember { mutableStateOf(false) }
     var selectedSource by remember { mutableStateOf(initialSource ?: Source.DANBOORU) }
     var currentPage by remember { mutableStateOf(1) }
-    val scope = rememberCoroutineScope()
+    var selectedTab by remember { mutableStateOf(0) } // 0: Keyword, 1: Reverse Image Search
+    var reverseSearchUrl by remember { mutableStateOf("") }
+    var sauceNaoResults by remember { mutableStateOf<List<SauceNaoResult>>(emptyList()) }
+    var isReverseSearching by remember { mutableStateOf(false) }
 
+    suspend fun performReverseSearch() {
+        if (reverseSearchUrl.isBlank() || isReverseSearching) return
+        isReverseSearching = true
+        sauceNaoResults = emptyList()
+        sauceNaoResults = SauceNaoClient.searchByUrl(reverseSearchUrl, prefs.sauceNaoApiKey)
+        isReverseSearching = false
+    }
+
+    val scope = rememberCoroutineScope()
+    
     suspend fun performSearch(newSearch: Boolean = true) {
         if (isSearching) return
         if (newSearch) {
@@ -98,23 +113,44 @@ fun SearchView(
     ) {
         // 顶栏标题
         Column(modifier = Modifier.padding(top = if (isCompact) 10.dp else 16.dp, bottom = 8.dp)) {
-            Text(
-                "图谱检索",
-                style = if (isCompact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(8.dp))
-
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "图谱检索",
+                    style = if (isCompact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            
+            TabRow(
+                selectedTabIndex = selectedTab,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                containerColor = androidx.compose.ui.graphics.Color.Transparent
+            ) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("关键词检索", fontWeight = FontWeight.Bold) }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("以图搜图 (SauceNAO)", fontWeight = FontWeight.Bold) }
+                )
+            }
+        }
+            
+        if (selectedTab == 0) {
             // 搜索输入框
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text(
-                        if (selectedSource == Source.FANBOX) "输入创作者 ID/名称..." else "多标签空格分割，如 1girl landscape..."
-                    )
-                },
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text(
+                            if (selectedSource == Source.FANBOX) "输入创作者 ID/名称..." else "多标签空格分割，如 1girl landscape..."
+                        )
+                    },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
@@ -321,5 +357,78 @@ fun SearchView(
                 }
             }
         }
+        } // closes if (selectedTab == 0)
+        
+        if (selectedTab == 1) {
+            // SauceNAO UI
+                OutlinedTextField(
+                    value = reverseSearchUrl,
+                    onValueChange = { reverseSearchUrl = it },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    placeholder = { Text("输入图片 URL (支持 Pixiv, Danbooru 等外链)...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (reverseSearchUrl.isNotEmpty()) {
+                            IconButton(onClick = { reverseSearchUrl = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "清除")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { scope.launch { performReverseSearch() } })
+                )
+                Button(
+                    onClick = { scope.launch { performReverseSearch() } },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                ) {
+                    Text("以图搜图 (SauceNAO)")
+                }
+
+                if (isReverseSearching) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    }
+                } else if (sauceNaoResults.isEmpty() && reverseSearchUrl.isNotBlank()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("未找到相似图片", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        lazyItems(sauceNaoResults) { result ->
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Row(modifier = Modifier.padding(12.dp)) {
+                                    coil3.compose.AsyncImage(
+                                        model = result.header?.thumbnail,
+                                        contentDescription = "Thumbnail",
+                                        modifier = Modifier.size(100.dp).clip(RoundedCornerShape(8.dp)),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column {
+                                        Text("相似度: ${result.header?.similarity}%", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(result.data?.title ?: result.data?.source ?: "未知来源", style = MaterialTheme.typography.bodyMedium)
+                                        Text("画师: ${result.data?.member_name ?: result.data?.creator ?: "未知"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if (result.data?.pixiv_id != null) {
+                                            Text("Pixiv ID: ${result.data.pixiv_id}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        if (!result.data?.ext_urls.isNullOrEmpty()) {
+                                            Spacer(Modifier.height(8.dp))
+                                            OutlinedButton(onClick = { /* Could open URL */ }, modifier = Modifier.height(32.dp)) {
+                                                Text(result.data!!.ext_urls!!.first(), fontSize = 10.sp, maxLines = 1)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
     }
-}

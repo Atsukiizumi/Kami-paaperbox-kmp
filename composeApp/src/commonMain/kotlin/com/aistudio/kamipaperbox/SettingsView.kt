@@ -227,7 +227,59 @@ fun SettingsView(
             }
         }
 
-        // 5. 存储仓储
+        // 5. 账号与认证
+        Text("账号与认证", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text("Pixiv Refresh Token", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = prefs.pixivRefreshToken,
+                    onValueChange = { SettingsManager.setPixivTokens(prefs.pixivAccessToken, it) },
+                    placeholder = { Text("输入您的 Refresh Token...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    singleLine = true
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "为访问官方接口，需输入您的 Pixiv 刷新令牌。目前已支持自动利用令牌换取 Access Token。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    lineHeight = 18.sp
+                )
+                
+                Spacer(Modifier.height(14.dp))
+                Text("SauceNAO API Key (以图搜图)", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = prefs.sauceNaoApiKey,
+                    onValueChange = { SettingsManager.setSauceNaoApiKey(it) },
+                    placeholder = { Text("输入您的 SauceNAO API Key (可选)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    singleLine = true
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "用于突破查询频率限制，可以在 saucenao.com 获取免费 Key。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    lineHeight = 18.sp
+                )
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        Spacer(Modifier.height(20.dp))
+
+        // 6. 存储仓储
         Text("画匣与存储仓储", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
 

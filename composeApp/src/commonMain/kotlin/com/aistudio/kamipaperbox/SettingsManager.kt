@@ -12,7 +12,10 @@ data class AppPreferences(
     val themePreset: ThemePreset = ThemePreset.WASHI,
     val searchHistory: List<String> = listOf("landscape", "original", "1girl", "genshin_impact", "cyberpunk"),
     val vaultPath: String = "",
-    val gridColumns: Int = 2
+    val gridColumns: Int = 2,
+    val pixivAccessToken: String = "",
+    val pixivRefreshToken: String = "",
+    val sauceNaoApiKey: String = ""
 )
 
 object SettingsManager {
@@ -28,6 +31,14 @@ object SettingsManager {
 
     fun setGridColumns(columns: Int) {
         _prefs.update { it.copy(gridColumns = columns) }
+    }
+
+    fun setPixivTokens(accessToken: String, refreshToken: String) {
+        _prefs.update { it.copy(pixivAccessToken = accessToken, pixivRefreshToken = refreshToken) }
+    }
+
+    fun setSauceNaoApiKey(key: String) {
+        _prefs.update { it.copy(sauceNaoApiKey = key) }
     }
 
     fun setIncludeR18(value: Boolean) {
