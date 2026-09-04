@@ -20,7 +20,8 @@ enum class Screen(val title: String) {
     SEARCH("检索"),
     VAULT("画匣"),
     HISTORY("足迹"),
-    SETTINGS("纸谱")
+    SETTINGS("纸谱"),
+    QUEUE("传输")
 }
 
 @Composable
@@ -64,8 +65,10 @@ fun MainAppView() {
                                                 Screen.BROWSE -> if (currentScreen == screen) Icons.Filled.GridView else Icons.Outlined.GridView
                                                 Screen.SEARCH -> if (currentScreen == screen) Icons.Filled.Search else Icons.Outlined.Search
                                                 Screen.VAULT -> if (currentScreen == screen) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder
-                                                Screen.HISTORY -> if (currentScreen == screen) Icons.Filled.History else Icons.Outlined.History
-                                                Screen.SETTINGS -> if (currentScreen == screen) Icons.Filled.Tune else Icons.Outlined.Tune
+                                            Screen.HISTORY -> if (currentScreen == screen) Icons.Filled.History else Icons.Outlined.History
+                                            Screen.SETTINGS -> if (currentScreen == screen) Icons.Filled.Tune else Icons.Outlined.Tune
+                                            Screen.QUEUE -> if (currentScreen == screen) Icons.Filled.Download else Icons.Outlined.Download
+
                                             },
                                             contentDescription = screen.title
                                         )
@@ -138,6 +141,8 @@ fun MainAppView() {
                                             Screen.VAULT -> if (currentScreen == screen) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder
                                             Screen.HISTORY -> if (currentScreen == screen) Icons.Filled.History else Icons.Outlined.History
                                             Screen.SETTINGS -> if (currentScreen == screen) Icons.Filled.Tune else Icons.Outlined.Tune
+                                            Screen.QUEUE -> if (currentScreen == screen) Icons.Filled.Download else Icons.Outlined.Download
+
                                         },
                                         contentDescription = screen.title
                                     )
@@ -233,5 +238,6 @@ fun AppScreenContent(
         Screen.VAULT -> VaultView(isCompact = isCompact, onSelect = onSelect)
         Screen.HISTORY -> HistoryView(isCompact = isCompact, onSelect = onSelect, onAuthorSelect = onSelectCreator)
         Screen.SETTINGS -> SettingsView(isCompact = isCompact)
+        Screen.QUEUE -> QueueView(onBack = { })
     }
 }

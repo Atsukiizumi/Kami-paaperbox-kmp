@@ -35,7 +35,8 @@ data class WorkCard(
     val height: Int? = null,
     val rating: String = "s", // s: safe, q: questionable, e: explicit
     val isAi: Boolean = false,
-    val isRestricted: Boolean = false // Fanbox patron/locked indicator
+    val isRestricted: Boolean = false,
+    val isUgoira: Boolean = false // Fanbox patron/locked indicator
 )
 
 @Serializable

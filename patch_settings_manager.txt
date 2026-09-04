@@ -1,0 +1,3 @@
+    fun setPixivCookie(cookie: String) {
+        _prefs.update { it.copy(pixivCookie = cookie) }
+    }

@@ -1,0 +1,32 @@
+    suspend fun loginWithCode(code: String, codeVerifier: String): Boolean = mutex.withLock {
+        try {
+            val response: PixivAuthResponse = httpClient.submitForm(
+                url = "https://oauth.secure.pixiv.net/auth/token",
+                formParameters = Parameters.build {
+                    append("client_id", CLIENT_ID)
+                    append("client_secret", CLIENT_SECRET)
+                    append("grant_type", "authorization_code")
+                    append("code", code)
+                    append("code_verifier", codeVerifier)
+                    append("redirect_uri", "https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback")
+                    append("include_policy", "true")
+                }
+            ) {
+                header("User-Agent", "PixivAndroidApp/5.0.234 (Android 11; Pixel 5)")
+            }.body()
+
+            if (response.has_error || response.access_token == null) {
+                println("Pixiv Auth Error: ${response.errors?.system?.message}")
+                return false
+            }
+
+            SettingsManager.setPixivTokens(
+                accessToken = response.access_token,
+                refreshToken = response.refresh_token ?: ""
+            )
+            return true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        }
+    }

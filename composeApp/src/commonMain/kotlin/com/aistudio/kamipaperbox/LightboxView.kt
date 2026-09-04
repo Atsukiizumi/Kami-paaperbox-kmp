@@ -28,6 +28,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.ImageBitmap
+
 
 @Composable
 fun LightboxView(
@@ -38,6 +43,32 @@ fun LightboxView(
     onAuthorClick: (author: String, source: Source) -> Unit
 ) {
     val isInVault = VaultManager.isItemInVault("${work.source}_${work.id}")
+    
+    val ugoiraData by produceState<Pair<List<ImageBitmap>, List<Int>>?>(initialValue = null, work) {
+        if (work.isUgoira) {
+            withContext(Dispatchers.IO) {
+                val meta = GalleryRepository.fetchPixivUgoiraMetadata(work.id)
+                val zipUrl = meta?.zip_urls?.large ?: meta?.zip_urls?.medium
+                if (zipUrl != null && meta?.frames != null) {
+                    val zipBytes = GalleryRepository.downloadBytes(zipUrl)
+                    if (zipBytes != null) {
+                        val extracted = extractZip(zipBytes)
+                        val frames = mutableListOf<ImageBitmap>()
+                        val delays = mutableListOf<Int>()
+                        meta?.frames?.forEach { frameMeta ->
+                            val fileBytes = extracted[frameMeta.file]
+                            if (fileBytes != null) {
+                                frames.add(decodeImageBitmap(fileBytes))
+                                delays.add(frameMeta.delay)
+                            }
+                        }
+                        value = Pair(frames, delays)
+                    }
+                }
+            }
+        }
+    }
+
     val imageList = if (work.additionalImages.isNotEmpty()) work.additionalImages else listOf(work.originalUrl)
     var currentPageIndex by remember(work) { mutableStateOf(0) }
     
@@ -85,20 +116,41 @@ fun LightboxView(
                 },
             contentAlignment = Alignment.Center
         ) {
-            AsyncImage(
-                model = currentDisplayUrl,
-                contentDescription = work.title,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = if (isCompact) 8.dp else 24.dp, vertical = 72.dp)
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offsetX,
-                        translationY = offsetY
-                    ),
-                contentScale = ContentScale.Fit
-            )
+            if (work.isUgoira) {
+                val data = ugoiraData
+                if (data != null) {
+                    UgoiraPlayer(
+                        frames = data.first,
+                        delays = data.second,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = if (isCompact) 8.dp else 24.dp, vertical = 72.dp)
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offsetX,
+                                translationY = offsetY
+                            )
+                    )
+                } else {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            } else {
+                AsyncImage(
+                    model = currentDisplayUrl,
+                    contentDescription = work.title,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = if (isCompact) 8.dp else 24.dp, vertical = 72.dp)
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offsetX,
+                            translationY = offsetY
+                        ),
+                    contentScale = ContentScale.Fit
+                )
+            }
         }
 
         // 多图翻页浮动控制器 (当作品包含多图或漫画模式时)

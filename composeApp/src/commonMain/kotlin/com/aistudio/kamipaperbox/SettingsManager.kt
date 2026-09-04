@@ -15,6 +15,7 @@ data class AppPreferences(
     val gridColumns: Int = 2,
     val pixivAccessToken: String = "",
     val pixivRefreshToken: String = "",
+    val pixivCookie: String = "",
     val sauceNaoApiKey: String = ""
 )
 
@@ -34,6 +35,9 @@ object SettingsManager {
     }
 
     fun setPixivTokens(accessToken: String, refreshToken: String) {
+    fun setPixivCookie(cookie: String) {
+        _prefs.update { it.copy(pixivCookie = cookie) }
+    }
         _prefs.update { it.copy(pixivAccessToken = accessToken, pixivRefreshToken = refreshToken) }
     }
 

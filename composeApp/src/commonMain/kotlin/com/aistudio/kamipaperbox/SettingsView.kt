@@ -13,12 +13,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsView(
     isCompact: Boolean
 ) {
+    
     val prefs by SettingsManager.prefs.collectAsState()
+    var showPixivLogin by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
 
     Column(
         modifier = Modifier
@@ -236,23 +242,31 @@ fun SettingsView(
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Text("Pixiv Refresh Token", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                Text("Pixiv 授权与登录", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Spacer(Modifier.height(4.dp))
+                Button(onClick = { showPixivLogin = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("网页登录 Pixiv 自动抓取 Token")
+                }
                 Spacer(Modifier.height(4.dp))
                 OutlinedTextField(
                     value = prefs.pixivRefreshToken,
                     onValueChange = { SettingsManager.setPixivTokens(prefs.pixivAccessToken, it) },
-                    placeholder = { Text("输入您的 Refresh Token...") },
+                    placeholder = { Text("或手动输入 Refresh Token...") },
                     modifier = Modifier.fillMaxWidth(),
                     textStyle = MaterialTheme.typography.bodySmall,
                     singleLine = true
                 )
                 Spacer(Modifier.height(4.dp))
+                if (prefs.pixivCookie.isNotBlank()) {
+                    Text("已成功抓取登录 Cookie！", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                }
                 Text(
-                    "为访问官方接口，需输入您的 Pixiv 刷新令牌。目前已支持自动利用令牌换取 Access Token。",
+                    "通过内嵌网页安全登录 Pixiv，系统将自动抓取 Cookie 和 Access Token 以访问官方接口。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     lineHeight = 18.sp
                 )
+
                 
                 Spacer(Modifier.height(14.dp))
                 Text("SauceNAO API Key (以图搜图)", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
